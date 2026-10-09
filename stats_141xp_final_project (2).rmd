@@ -1,0 +1,214 @@
+---
+title: "Stats 141XP -- Final Project"
+date: "2023-02-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tools)
+library(stringdist)
+##read the raw data
+raw_data = read.csv("2023-national-universities-2014-2023-metrics-for-stats-consulting-23W-2014-2023-T11-32-08-25-cs-2023-01-19T193212.csv")
+dim(raw_data)
+
+## subset the data for 2023 issue year
+data_2023 = raw_data[raw_data$Issue.year == 2023,]
+colSums(is.na(data_2023)) ## No data for the Footnote variable
+
+###read the cleaned dataset
+cleaned_data = readxl::read_xlsx("Longitudinal USNWR ranking data.xlsx")
+dim(cleaned_data)
+colSums(is.na(cleaned_data)) # Metric value has 4063
+head(cleaned_data)
+```
+
+
+### Part I: Handle school names
+
+```{r}
+####### Step 1: Data cleaning
+############ Step 1.1: Change to lower letters for preferred school names and school names of 2023 issue year 
+preferred_names_forms = cleaned_data$`Institution Name` %>% unique()
+preferred_names = preferred_names_forms %>% tolower() ## 430 unique school names for the cleaned dataset
+school_names_2023_forms = data_2023$Name %>% unique() 
+school_names_2023 = school_names_2023_forms %>% tolower() ## 443 unique school names for the raw data of 2023 issue year
+
+########### Step 1.2: Using regular expressions to change the school names of 2023 issue year which contain the word "at", ", ", and " -- " to "--" , and school names starting which the word "the" change that word to "". Doing so, we can match similar names.
+
+### Cases where school names included "at" ->> replace by -- 
+school_names_2023 = str_replace(school_names_2023, " at ", "--") 
+### Cases where school names included ", " ->> replace by --
+school_names_2023 = str_replace(school_names_2023, ", ", "--") 
+### Cases where school names included " -- " ->> replace by --
+school_names_2023 = str_replace(school_names_2023, " -- ", "--")
+### Cases where school names start with "the " ->> replace by ""
+school_names_2023= str_replace(school_names_2023, "^the ", "")
+
+####### Step 2: Using string comparison by %in% operation
+ind_not_matched = which(!(school_names_2023 %in% preferred_names)) ### 73 school names that is unmatched
+not_matched_schools = school_names_2023[ind_not_matched]
+
+####### Step 3: Implement fuzzy matching method - (Jaro-Winkler distance)
+n = length(not_matched_schools)
+best_similarity_scores = numeric(n)
+best_matched_school_ind = numeric(n)
+for(i in seq_len(n)){
+  similarity_scores = stringdist(not_matched_schools[i], preferred_names, method = "jw") 
+  best_similarity_scores[i] = min(similarity_scores)
+  best_matched_school_ind[i] = which.min(similarity_scores)
+}
+
+####### 3.1 Create a result table
+prospective_matched_schools = preferred_names[best_matched_school_ind]
+df = data.frame(not_matched_schools,prospective_matched_schools, ind_not_matched, best_matched_school_ind) ## the result table after matching
+###### 3.2 Cleaning the result table by remove un-needed words/ characters to find matches 
+###### Case: "--"
+df[,1] = str_replace_all(df[,1], "--", " ")
+df[,2] = str_replace_all(df[,2], "--", " ")
+###### Case: "at"
+df[,1] = str_replace(df[,1], " at ", " ")
+df[,2] = str_replace(df[,2], " at ", " ")
+###### Case: "of"
+df[,1] = str_replace(df[,1], " of ", " ")
+df[,2] = str_replace(df[,2], " of ", " ")
+###### Case: "at"
+df[,1] = str_replace(df[,1], "^the ", "")
+df[,2] = str_replace(df[,2], "^the ", "")
+######## 3.2 Compare to cols and create a new school name vector for 2023 issue year
+ind_matched_schools = which(df[,1] == df[,2])
+new_school_names_2023 = school_names_2023
+new_school_names_2023[df[ind_matched_schools,3]] = preferred_names[df[ind_matched_schools,4]] 
+
+#### Step 4. Standardized school names for the 2023 issue dataset
+###### 4.1. Re-format un-matched school names
+ind_not_matched_2 = which(!(new_school_names_2023 %in% preferred_names))
+not_matched_schools_2 = new_school_names_2023[ind_not_matched_2]
+not_matched_schools_2 = toTitleCase(not_matched_schools_2)
+not_matched_schools_2[63] = "Southern University and A&M College"
+not_matched_schools_2 = str_replace(not_matched_schools_2, "\\([A-Za-z]{2}\\)", function(x) toupper(x))
+#### 4.2. Handle two side cases
+###### 4.2.1. University of Tennessee, Knoxville == University of Tennessee
+ind_side_case_1 = which("University of Tennessee--Knoxville" == not_matched_schools_2)
+not_matched_schools_2[ind_side_case_1] = "University of Tennessee"
+
+###### 4.2.2 "Touro university"  == "Touro College"
+ind_side_case_2 = which("Touro University" == not_matched_schools_2)
+not_matched_schools_2[ind_side_case_2] = "Touro College"
+ind_matched = which(new_school_names_2023 %in% preferred_names) ### 380 school names matched and 63 school names unmatched we consider those unmatched as new schools
+new_school_names_2023[-ind_matched]
+##### Step 5.Combine un_matched and match schools 
+vec1 = c()
+vec2 = c()
+for(i in seq_len(443)){
+  if(sum(preferred_names %in% school_names_2023[i]) != 0){
+    ind = which(preferred_names %in% school_names_2023[i])
+    vec1 = c(vec1,i)
+    vec2 = c(vec2,ind)
+  }
+}
+ind_vec1= c(vec1, 
+            df[ind_matched_schools,3],
+            ind_not_matched_2) 
+ind_vec2 = c(vec2, 
+             df[ind_matched_schools,4],
+             ind_not_matched_2)
+school_name_vec1 = c(school_names_2023_forms[vec1], 
+                     school_names_2023_forms[df[ind_matched_schools,3]],
+                     school_names_2023_forms[ind_not_matched_2])
+school_name_vec2 = c(preferred_names_forms[vec2], 
+                     preferred_names_forms[df[ind_matched_schools,4]],
+                     not_matched_schools_2)
+
+standardized_school_table = tibble(ind_vec1,ind_vec2, school_name_vec1, school_name_vec2) 
+sorted_standardized_school_table <- standardized_school_table[order(standardized_school_table$ind_vec1), ]
+
+##### Step 6: Create a lookup vec
+lookup_1= sorted_standardized_school_table$school_name_vec2
+names(lookup_1) =  sorted_standardized_school_table$school_name_vec1
+
+##### Step 7: Standardize school names for the  2023 issue dataset
+data_2023$Name = lookup_1[data_2023$Name] %>% unname() ### Change/standardize school names for the whole 2023 dataset
+length(unique(data_2023$Name)) ### Check to ensure the number of unique school names is correct, which is 443
+
+```
+
+### Part II: Handle metrics 
+
+```{r}
+metric = data_2023$Metric.description
+####### Step 1: Data cleaning
+############ Step 1.1: Change to lower letters for preferred metrics and metric of 2023 issue year 
+preferred_metric_forms = cleaned_data$`Metric Name` %>% unique()
+length(preferred_metric_forms) ### 42 unique metrics
+preferred_metrics = tolower(preferred_metric_forms) 
+
+metric_forms_2023 = data_2023$Metric.description %>% unique()
+length(metric_forms_2023) ### 34 unique metrics
+metrics_2023 = tolower(metric_forms_2023)
+
+####### Step 2: Using string comparison by %in% operation
+ind_matched_metrics = which(metrics_2023 %in% preferred_metrics)
+length(ind_matched_metrics) ### 25 matched metrics
+
+ind_not_matched_metrics = which(!(metrics_2023 %in% preferred_metrics))
+not_matched_metrics = metrics_2023[ind_not_matched_metrics] ### 9 unmatched metrics
+
+####### Step 3: Implement fuzzy matching method - (Jaro-Winkler distance)
+n = length(not_matched_metrics)
+best_similarity_metric_socres = numeric(n)
+ind_best_matched_metric = numeric(n)
+for(i in seq_len(n)){
+  similarity_scores = stringdist(not_matched_metrics[i], preferred_metrics, method = "jw") 
+  best_similarity_metric_socres[i] = min(similarity_scores)
+  ind_best_matched_metric[i] = which.min(similarity_scores)
+}
+possible_matched_metrics = preferred_metrics[ind_best_matched_metric]
+
+#### create a result table after using the fuzzy matching method
+df_2 = data.frame(not_matched_metrics,
+                  possible_matched_metrics,
+                  ind_not_matched_metrics, 
+                  ind_best_matched_metric) 
+
+vec3 = c()
+vec4 = c()
+for(i in seq_len(34)){
+  if(sum(preferred_metrics %in% metrics_2023[i]) != 0){
+    ind = which(preferred_metrics %in% metrics_2023[i])
+    vec3 = c(vec3,i)
+    vec4 = c(vec4,ind)
+  }
+}
+ind_vec3= c(vec3, df_2[,3])
+ind_vec4 = c(vec4, df_2[,4])
+             
+metric_vec3 = c(metric_forms_2023[vec3], 
+                     metric_forms_2023[df_2[,3]])
+
+metric_vec4 = c(preferred_metric_forms[vec4], 
+                     preferred_metric_forms[df_2[,4]])
+                
+### Step 4: Combine un_matched and match metrics
+standardized_metric_table = data_frame(ind_vec3,ind_vec4, metric_vec3, metric_vec4)
+sorted_standardized_metric_table <- standardized_metric_table[order(standardized_metric_table$ind_vec3), ]
+
+##### Step 5: Create a lookup vector
+lookup_2= sorted_standardized_metric_table$metric_vec4
+names(lookup_2) =  ordered_standardized_metric_table$metric_vec3
+
+##### Step 6: Standardized school names for the  2023 issue dataset
+data_2023$Metric.description = lookup_2[data_2023$Metric.description] %>% unname()
+length(unique(data_2023$Metric.description)) ### Check to ensure the number of unique school names is correct 
+
+
+
+# check.df =data.frame(metric, data_2023$Metric.description)
+```
+
+
