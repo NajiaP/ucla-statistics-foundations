@@ -1,0 +1,330 @@
+--FILTERING ON A SINGLE CONDITION
+
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where srvc_name= 'Catering - Lunch'
+
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where srvc_name != 'Catering - Lunch'
+
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where srvc_name NOT IN ('Gift Basket Delivery - Small', 'Gift Basket Delivery - Medium', 'Gift Basket Delivery - Large','Gift Basket Delivery - Small', 'Gift Basket Delivery - Medium', 'Gift Basket Delivery - e Large')
+
+
+-- FIND THE ROWS WHERE SERVICE NAME IS 'Gift Basket Delivery - Small', 'Gift Basket Delivery - Medium', or 'Gift Basket Delivery - Large'-CREATE LIST
+-- IF ADD STH not exists, not hurt
+select
+srvc_name,
+min_participants,
+per_person_price
+from additional_service
+where srvc_name IN ('Gift Basket Delivery - Small', 'Gift Basket Delivery - Medium', 'Gift Basket Delivery - Large','Gift Basket Delivery - Small', 'Gift Basket Delivery - Medium', 'Gift Basket Delivery - e Large')
+
+-- rename the columns
+select top 3
+additional_service = srvc_name,
+minimum_participants = min_participants
+from additional_service
+
+--FIND THE ROWS WHERE THE SERVICE NAME STARTS WITH 'Gift Basket Delivery'
+select
+srvc_name,
+min_participants,
+per_person_price
+from additional_service
+where srvc_name LIKE 'Gift Basket Delivery%'
+-- NOT LIKE(DOSE NOT START WITH)
+
+-- --FIND THE ROWS WHERE THE SERVICE NAME CONTAINS WITH 'Party'
+select
+srvc_name,
+min_participants,
+per_person_price
+from additional_service
+where srvc_name LIKE '%Party%'
+
+-- find the rows where the price per person is between $75 and $125
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where per_person_price BETWEEN 75 AND 125
+-- < 75(less than 75) ; >= 125 greater or equal to 125
+
+--when are NULL values returned, REMEMBER NULL isn't a value, can't use= before
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where min_participants IS NULL
+--opposite: IS NOT NULL
+
+
+-- FILTERING MULTIPLE CONDITIONS(LOGICAL OPERATOR)
+
+--Find the rows for services that required no more than 6 participants and costs no more than $25 per person
+--always remember include schema name.table name
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where min_participants <= 6 AND per_person_price <=25
+
+-- filter again to show the catering services that meets the last criteria
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where min_participants <= 6 AND per_person_price <=25
+        AND srvc_name LIKE 'catering%'
+
+-- find the rows either catering services, gift baskets, or the Two Trees Tasting Party
+-- LIKE for char, each condition needs to be specified
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where srvc_name LIKE 'catering%'
+    or srvc_name LIKE 'gift%' 
+    or srvc_name LIKE 'Two Trees Tasting Party%'
+
+--find the rows for services that cost less than $30 that are either catering or gift basket
+--adding () to make it clear of filtering multiple conditions combination,
+--Conditions are evaluated in the order that they occur, but conditions in parenthesis are treated as a single unit and are evaluated together.
+select
+srvc_name,
+min_participants,
+per_person_price
+from dbo.additional_service
+where (srvc_name LIKE 'catering%'
+    or srvc_name LIKE 'gift%' )
+    AND per_person_price < 30
+
+
+-- inner joins
+    SELECT *
+   
+    FROM dbo.product p
+    -- p as alias for product table, f as alias for oil_flavor table
+    INNER JOIN dbo.oil_flavor f
+    on p.flavor_id=f.flavor_id
+    -- output all the columns both from P & F; flavor_id matches in each of rows 
+    --SELECT(update the first step to output required columns)
+   -- p.product_id,(remember to specify which value u are referring to if there's 2 columns with the same name in different tables)
+    --P.flavor_id,
+    --f.lavor_name,
+    --p.price
+
+--Multiple inner joins
+ SELECT
+    p.product_id,
+    p.flavor_id,
+    f.flavor_name,
+    p.price,
+    pt.* -- add ALL COULumns from pt table to query results
+    
+FROM dbo.product p
+INNER JOIN dbo.oil_flavor f
+    on p.flavor_id = f.flavor_id
+INNER JOIN dbo.product_type pt
+    on p.product_type_id = pt.product_type_id
+WHERE pt.product_type ='case'
+  
+
+--outer joins(join orders matters, anchoring table come first )
+--Left outer join(0most frequently): get to keep all of the data inyour anchoring table, along with anythinh that matches in the secondary table added to the query throu an outher join
+--get the full name and order total for every customer named in sydney
+SELECT
+ c.full_name,
+ po.order_total
+ -- remember to add , between each query  
+FROM dbo.customer c 
+Left OUTER JOIN dbo.product_order po --compare to use inner join(with only 5 rows of sydney bartlett), it dosen't filter the results based on join condition
+    ON c.customer_id = po.customer_id
+WHERE first_name= 'sydney'
+--WHERE po.order_total IS NULL (show the null results to see cutomers who hasn't placed order yet)
+
+--subqueries (can't reference any tables from subquery in our main select statement)
+--give the names of all of the customers who live in boston
+SELECT 
+c.full_name
+FROM dbo.customer c 
+WHERE city_state_zip_id IN (SELECT 
+city_state_zip_id
+FROM dbo.city_state_zip
+WHERE city_name = 'boston' ) -- inside equals (9,10) if we run inside alone
+
+-- if we want to query both colums from different tables in main select statement, then use inner join instead
+SELECT
+c.full_name,
+z.city_name
+from dbo.customer c
+INNER JOIN dbo.city_state_zip z 
+    ON c.city_state_zip_id = z.city_state_zip_id
+WHERE z.city_name ='boston'
+
+
+--case statement
+DECLARE @number int=6
+
+SELECT
+    divisible= case
+    when @number % 2 = 0
+        then 'divisible by 2'
+    when @number % 3 = 0
+        then 'divisible by 3' 
+        else 'dose not meet the criteria'
+    end   
+
+
+    -- return the full_name & spending tier for orders placed after 8/1/2020 by customers in CA
+    -- Spending tier '1 - low' =order total less than $20
+    -- Spending tier '2 - medium' =order total between $20 & $100
+     -- Spending tier '3 - high' =order total higher than $100
+     -- else = '0, no recent orders'
+
+     SELECT distinct -- distinct avoid duplicated query results
+     c.full_name,
+     spending_tier = case 
+        when po.order_total <20
+            then '1 - low'
+        when po.order_total between 20 and 100
+            then '2 - medium'
+        when po.order_total >100
+            then  '3 - high'
+        else  '0'
+        END
+     FROM dbo.customer c
+      LEFT JOIN dbo.product_order po --use join if don't know use inner or outer join
+        ON c.customer_id = po.customer_id
+        AND po.order_date > '8/1/2020' -- MOVED HERE AS secondary join condition instead of put it below where clause to also include customers if they didn't placed an order after 08/01
+        WHERE c.city_state_zip_id IN(
+            select z.city_state_zip_id
+            from dbo.city_state_zip z
+            WHERE z.state_name = 'California'
+        )
+        
+    ORDER by c.full_name desc
+
+
+-- built in functions
+-- cast([column names] AS [data type]) used for change data type of column for the duration of query where specified, ANSI standard
+-- convert ([data type], [column name], [style number (optional)])
+
+SELECT
+f.flavor_name,
+pt.product_type,
+p.price,
+--cast_price = CAST(p.price as int)
+convert_price = CONVERT (decimal(6,3), p.price) --3 places after decimal point
+From dbo.product p
+INNER JOIN dbo.oil_flavor f 
+    ON p.flavor_id = f.flavor_id
+INNER JOIN dbo.product_type pt 
+    ON p.product_type_id = pt.product_type_id
+
+-- CONCAT ([STRING],[string],[string]...) or [string]+[string] 
+DECLARE @price_prefix VARCHAR(20)= '$' -- if no assigned value, will return null, anything + null end up beig null
+SELECT
+f.flavor_name,
+pt.product_type,
+p.price,
+--dollar_sign = @price_prefix + cast(p.price as varchar(10)) -- to make it compatible with the numeric value & string values presenting
+    concat_price = CONCAT( @price_prefix, p.price)
+From dbo.product p
+INNER JOIN dbo.oil_flavor f 
+    ON p.flavor_id = f.flavor_id
+INNER JOIN dbo.product_type pt 
+    ON p.product_type_id = pt.product_type_id
+
+
+--FORMAT ([COLUMN NAME],'[CUSTOMER FORMAT]') OR FORMAT([COLUMN NAME],[FORMAT CODE],[CULTURE CODE])
+SELECT
+f.flavor_name,
+pt.product_type,
+p.price,
+format_price = FORMAT(p.price, 'C', 'en-GB') -- gb- great britain, US $
+
+From dbo.product p
+INNER JOIN dbo.oil_flavor f 
+    ON p.flavor_id = f.flavor_id
+INNER JOIN dbo.product_type pt 
+    ON p.product_type_id = pt.product_type_id
+
+SELECT
+ c.full_name,
+ o.order_date,
+ format_order_data = format(o.order_date, 'MMM dd, yyyy') -- M for month, m for minute
+FROM dbo.customer c 
+INNER JOIN dbo.product_order o 
+    ON c.customer_id = o.customer_id
+
+--getdate() or sysdatetime() BOTH return daytime value, but differs in precision
+SELECT GETDATE(), SYSDATETIME()
+
+--DATADD([interval],[nember],[date value])
+SELECT DATEADD(month,1,SYSDATETIME()) -- 1= a month from now on, -1= past month from now on
+SELECT
+ c.full_name,
+ o.order_date
+ 
+FROM dbo.product_order o 
+INNER JOIN  dbo.customer c
+    ON c.customer_id = o.customer_id
+WHERE o.order_date > DATEADD(month, -48 , SYSDATETIME())
+
+-- coalesce([first choice],[second choice],[third choice])
+-- isnull ([1st choice],[2nd choice]) both deals with null values
+DECLARE @ovveride  =500
+SELECT
+    srvc_name,
+    min_participants,
+    isnull_participants = ISNULL(min_participants, 0), -- sets null value to 0
+    coalesce_participants = coalesce (min_participants, @ovveride, 0), -- sets value to declared value, if declared value is non-defined, then return 0
+    coalesce_participants = coalesce (min_participants, @ovveride, 'n/a')-- if sets declare value = NULL, then return error, cause expects same data type. If wants n/a to work here, needs CAST both values as VARCHAR
+From dbo.additional_service
+
+
+--aggregates
+SELECT COUNT(*) , -- counting entire row
+        SUM(o.order_total),
+        yr= YEAR(o.order_date),
+        highest_order_total = MAX(o.order_total), -- min()
+        c.full_name -- run # of orders run by per customer
+    FROM dbo.customer c 
+Inner JOIN dbo.product_order o 
+    ON c.customer_id =o.customer_id
+    group BY c.full_name , YEAR(o.order_date)-- can't add any other columns in SELECT that are not referenced in GROUP BY clause if use AGGREGATES function
+
+-- Query Processing Order: how to order and filter results that include data from an aggregate computation
+SELECT 
+        c.full_name,
+        order_count = COUNT(*),
+        order_total = sum (o.order_total)
+    FROM dbo.customer c 
+Inner JOIN dbo.product_order o 
+    ON c.customer_id =o.customer_id
+    -- WHERE sum(o.order_total) >500  returns error, cause happens between group by aggregated
+    group BY c.full_name -- default ascending
+    HAVING SUM(o.order_total)>500 -- resolve it after GROUP BY, it can be used for filtering using the results of an aggregate function.
+    ORDER BY --c.full_name desc 
+       --count(*), c.full_name
+       order_count -- unique: could order by any column alias
+
+       --query processing order 1. FROM+ JOINS 2.WHERE 3.GROUP BY (4. HAVING) 4.SELECT 5.ORDER BY 6.TOP
